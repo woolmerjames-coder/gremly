@@ -1,0 +1,64 @@
+name: CI - Health Check
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    env:
+      # Required secrets - set these in the repository Settings -> Secrets
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # Optional flag to control auto-creation behavior
+      AUTO_CREATE_NOTES: ${{ secrets.AUTO_CREATE_NOTES }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Use Node.js 18
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build app
+      run: npm run build
+
+    - name: Start Next app (background)
+      run: |
+        npm run start &
+        echo "Waiting for server to start..."
+        for i in {1..30}; do
+          if curl -sSf http://localhost:3000/api/health >/dev/null; then
+            echo "Server is up"
+            break
+          fi
+          sleep 1
+        done
+
+    - name: Check /api/health
+      run: |
+        echo "Querying /api/health"
+        response=$(curl -sS -X GET http://localhost:3000/api/health || true)
+        echo "Response: $response"
+        # Basic check: response must contain "ok":true
+        echo "$response" | grep -q '"ok":true'
+
+    - name: Run brief smoke
+      run: |
+        echo "POST /api/chat smoke test"
+        curl -sS -X POST http://localhost:3000/api/chat -H 'Content-Type: application/json' -d '{"message":"CI smoke: hello"}' | jq -r .bucket || true
+
+    - name: Stop background processes
+      if: always()
+      run: |
+        pkill -f "node" || true

@@ -1,6 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
+
+function getMessage(e: unknown) {
+  if (!e) return String(e);
+  if (typeof e === 'string') return e;
+  if (typeof e === 'object' && 'message' in e) return (e as { message?: string }).message ?? String(e);
+  return String(e);
+}
 
 export default function SignOutButton({ className }: { className?: string }) {
   const [loading, setLoading] = useState(false);
@@ -23,15 +30,15 @@ export default function SignOutButton({ className }: { className?: string }) {
       else {
         window.location.reload();
       }
-    } catch (err: any) {
-      setError(err?.message ?? String(err));
+    } catch (err: unknown) {
+      setError(getMessage(err));
     } finally {
       setLoading(false);
     }
   }
 
   // Load current user on mount
-  useState(() => {
+  useEffect(() => {
     let mounted = true;
     (async () => {
       try {
@@ -42,14 +49,14 @@ export default function SignOutButton({ className }: { className?: string }) {
         const { data } = await supabase.auth.getSession();
         if (!mounted) return;
         setEmail(data.session?.user?.email ?? null);
-      } catch (err) {
+      } catch {
         // ignore
       }
     })();
     return () => {
       mounted = false;
     };
-  });
+  }, []);
 
   return (
     <div className={className}>

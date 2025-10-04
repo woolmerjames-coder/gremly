@@ -6,11 +6,11 @@
 //   # apply (requires DATABASE_URL env var set)
 //   DATABASE_URL=postgres://... node scripts/run-sql.js
 
-const fs = require('fs');
-const path = require('path');
-const { Client } = require('pg');
+import fs from 'fs';
+import path from 'path';
+import { Client } from 'pg';
 
-const MIGRATIONS_DIR = path.join(__dirname, '..', 'supabase');
+const MIGRATIONS_DIR = path.join(new URL(import.meta.url).pathname, '..', 'supabase');
 
 function readSqlFiles() {
   if (!fs.existsSync(MIGRATIONS_DIR)) return [];
