@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import SignOutButton from "@/components/SignOutButton";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,6 +28,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: 12, borderBottom: "1px solid #eaeaea" }}>
+          <div style={{ fontWeight: 600 }}>Gremly</div>
+          <div>
+            <SignOutButton />
+          </div>
+        </header>
         {children}
       </body>
     </html>
