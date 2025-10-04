@@ -6,6 +6,7 @@ type ReqBody = {
   conversationId?: string;
   message: string;
   systemPrompt?: string;
+  classification?: Record<string, unknown>;
 };
 
 async function jsonResponse(body: unknown, status = 200) {
@@ -72,53 +73,37 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3) Call OpenAI to get an assistant response and classification
-    const system = systemPrompt ||
-      "You are an assistant that organizes user input into one bucket: Task, Calendar, Habit, Goal, Note. Reply conversationally and also produce a JSON classification with bucket, confidence (0-1) and a short explain field. Return the JSON only inside a markdown code block labeled JSON when asked to output it.";
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: message }
-      ],
-      response_format: { type: "json_object" }
-    });
-
-    const raw = completion.choices?.[0]?.message?.content || "{}";
-    let assistantText = "";
-    let parsed: unknown = {};
-    try {
-      if (typeof raw === "string") {
-        assistantText = raw;
-        parsed = JSON.parse(raw);
-      } else {
-        parsed = raw;
-        assistantText = JSON.stringify(raw);
-      }
-    } catch {
-      // fallback: try to extract JSON substring
-      assistantText = String(raw);
-      const m = String(raw).match(/\{[\s\S]*\}/);
-      if (m) {
-        try { parsed = JSON.parse(m[0]); } catch { parsed = {}; }
+    // 3) Obtain classification: prefer classification supplied by client;
+    // otherwise call the classify API internally.
+    const supplied = (body as any).classification as Record<string, unknown> | undefined;
+    let classification = supplied;
+    if (!classification) {
+      try {
+        const r = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/classify`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: message })
+        });
+        if (r.ok) classification = await r.json();
+      } catch {
+        // ignore and continue
       }
     }
 
-  const parsedRec = parsed as Record<string, unknown> | null;
-  const bucket = (parsedRec?.bucket as string) || "Note";
-  const confidence = (parsedRec?.confidence as number) ?? 0.5;
-  const AUTO_CREATE_NOTES = process.env.AUTO_CREATE_NOTES === 'true';
+    // Basic safe defaults if classification missing
+    const parsedRec = (classification ?? {}) as Record<string, unknown>;
+    const bucket = (parsedRec?.bucket as string) || "Note/Reflection";
+    const confidence = Number(parsedRec?.confidence ?? 0.5) as number;
+    const AUTO_CREATE_NOTES = process.env.AUTO_CREATE_NOTES === 'true';
 
     // 4) persist assistant message and create an item when bucket indicates
   let savedItem: unknown = null;
     if (userId) {
       if (convId) {
-        await supabase.from("messages").insert({ conversation_id: convId, user_id: userId, role: "assistant", content: assistantText });
+        // Save the short assistant text (we'll generate below)
+        // placeholder: assistantText will be generated server-side below
       }
 
       // create an item for Task/Goal/Habit/Calendar, optionally Notes
-      if (["Task", "Goal", "Habit", "Calendar"].includes(bucket) || (bucket === 'Note' && AUTO_CREATE_NOTES)) {
+    if (["Task", "Goal/Project", "Habit", "Calendar Event"].includes(bucket) || (bucket === 'Note/Reflection' && AUTO_CREATE_NOTES)) {
   const toInsert: Record<string, unknown> = { user_id: userId, raw_text: message, bucket, source_conversation: convId };
         // only include confidence if column exists (avoid failures if column not present)
         try {
@@ -134,7 +119,35 @@ export async function POST(req: Request) {
       }
     }
 
-  return jsonResponse({ ok: true, assistant: assistantText, classification: { bucket, confidence, explain: parsedRec?.explain as string | undefined }, conversationId: convId, savedItem }, 200);
+    // Build a short assistant sentence from classification (no JSON)
+    const explain = (parsedRec?.explain as string) || '';
+    const suggested = (parsedRec?.suggestedNextStep as string) || '';
+    const when = (parsedRec?.when as string) || '';
+    let assistantText = '';
+    if (bucket === 'Task') {
+      assistantText = `Captured as a Task${when ? ' — ' + when : ''}${suggested ? ` — ${suggested}` : ''}`;
+      // prefer brief: if suggested present, ask to set reminder
+      assistantText = suggested ? `Captured as a Task — ${suggested}` : `Captured as a Task${when ? ' — ' + when : ''}`;
+    } else if (bucket === 'Calendar Event') {
+      assistantText = suggested ? `Saved as an event — ${suggested}` : `Saved as an event${when ? ' — ' + when : ''}`;
+    } else if (bucket === 'Habit') {
+      assistantText = suggested ? `Captured as a Habit — ${suggested}` : `Captured as a Habit`;
+    } else if (bucket === 'Goal/Project') {
+      assistantText = suggested ? `Captured as a Goal — ${suggested}` : `Captured as a Goal/Project`;
+    } else {
+      assistantText = suggested ? `Saved as a Note — ${suggested}` : `Saved as a Note`;
+    }
+
+    // persist assistant message now
+    if (userId && convId) {
+      try {
+        await supabase.from("messages").insert({ conversation_id: convId, user_id: userId, role: "assistant", content: assistantText });
+      } catch {
+        // ignore
+      }
+    }
+
+    return jsonResponse({ ok: true, assistant: assistantText, classification: { ...parsedRec }, conversationId: convId, savedItem }, 200);
   } catch (e: unknown) {
     return jsonResponse({ error: formatError(e) }, 500);
   }

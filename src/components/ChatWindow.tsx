@@ -1,16 +1,19 @@
 "use client";
 
 import React, { useState } from "react";
+import { classifyText, ClassifierResult } from "../lib/classify";
+import AssistantBubble from "./AssistantBubble";
+import ClassificationBadge from "./ClassificationBadge";
 
-type Message = { id: string; role: "user" | "assistant"; text: string };
-type Classification = { bucket: string; confidence?: number; explain?: string } | null;
+type Message = { id: string; role: "user" | "assistant"; text: string; classification?: Classification };
+type Classification = ClassifierResult | null;
 
 export default function ChatWindow({ accessToken, showSidebar = true }: { accessToken?: string | null; showSidebar?: boolean }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [items, setItems] = useState<Array<{ id: string; raw_text: string; bucket?: string; status?: string }>>([]);
-  const [lastClassification, setLastClassification] = useState<Classification>(null);
+  const [items, setItems] = useState<Array<{ id: string; raw_text: string; bucket?: string; status?: string; when?: string; suggestedNextStep?: string }>>([]);
+  // classification is stored on the user message object itself
   const [toasts, setToasts] = useState<Array<{ id: string; text: string }>>([]);
   const [autoCreateNotes, setAutoCreateNotes] = useState(false);
 
@@ -18,24 +21,48 @@ export default function ChatWindow({ accessToken, showSidebar = true }: { access
     if (!input.trim()) return;
     const userMsg: Message = { id: String(Date.now()), role: "user", text: input };
     setMessages((m) => [...m, userMsg]);
+    // 1) classify via API
+    let classification: Classification = null;
+    try {
+      const r = await fetch('/api/classify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: userMsg.text }) });
+        if (r.ok) {
+        const json = await r.json();
+        classification = json as any;
+        // attach classification to message in state
+        setMessages((m) => m.map(msg => msg.id === userMsg.id ? { ...msg, classification } : msg));
+        // append to collected items (optimistic id)
+        setItems(it => [{ id: String(Date.now()), raw_text: userMsg.text, bucket: classification?.bucket, when: classification?.when, suggestedNextStep: classification?.suggestedNextStep }, ...it]);
+      }
+    } catch {
+      // ignore
+    }
     setInput("");
     setLoading(true);
 
       try {
+      // 2) ask server to generate short assistant text using classification
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
         },
-        body: JSON.stringify({ message: userMsg.text })
+        body: JSON.stringify({ message: userMsg.text, classification })
       });
       const data = await res.json();
       if (data?.assistant) {
         const assistantMsg: Message = { id: String(Date.now() + 1), role: "assistant", text: data.assistant };
         setMessages((m) => [...m, assistantMsg]);
-        // store classification for UI actions
-        if (data?.classification) setLastClassification(data.classification);
+        // store server classification on assistant response if provided
+        if (data?.classification) {
+          // save classification onto the last user message
+          const lastUser = [...messages].reverse().find(x => x.role === 'user');
+          if (lastUser) {
+            setMessages(m => m.map(msg => msg.id === lastUser.id ? { ...msg, classification: data.classification } : msg));
+          }
+          // ensure collected items has the server classification details
+          setItems(it => it.map(itm => itm.raw_text === userMsg.text ? { ...itm, bucket: data.classification.bucket, when: data.classification.when, suggestedNextStep: data.classification.suggestedNextStep } : itm));
+        }
         // refresh items if the server created one
         if (data?.savedItem) fetchItems();
       } else if (data?.error) {
@@ -73,7 +100,14 @@ export default function ChatWindow({ accessToken, showSidebar = true }: { access
           messages.map((m) => (
             <div key={m.id} style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 12, color: "#888" }}>{m.role}</div>
-              <div style={{ padding: 8, background: m.role === "user" ? "#f0f9ff" : "#f7f7f7", borderRadius: 6, color: '#000' }}>{m.text}</div>
+              {m.role === 'assistant' ? (
+                <AssistantBubble text={m.text} />
+              ) : (
+                <div style={{ padding: 8, background: m.role === "user" ? "#f0f9ff" : "#f7f7f7", borderRadius: 6, color: '#000' }}>{m.text}</div>
+              )}
+              {m.role === 'user' && m.classification && (
+                <ClassificationBadge c={m.classification} />
+              )}
             </div>
           ))
         )}
@@ -85,58 +119,7 @@ export default function ChatWindow({ accessToken, showSidebar = true }: { access
       </div>
 
       {/* Classification / Save UI */}
-      {lastClassification && (
-        <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>Last classification</div>
-          <div style={{ marginTop: 6, color: '#000' }}>
-            <div>Bucket: {lastClassification.bucket}</div>
-            <div>Confidence: {Math.round((lastClassification.confidence ?? 0) * 100)}%</div>
-            <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
-              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input type="checkbox" checked={autoCreateNotes} onChange={(e) => setAutoCreateNotes(e.target.checked)} />
-                <span style={{ fontSize: 13 }}>Auto-create Notes</span>
-              </label>
-              <button onClick={async () => {
-                // optimistic save: add to UI first
-                const lastUser = [...messages].reverse().find(x => x.role === 'user');
-                const textToSave = lastUser ? lastUser.text : input;
-                const optimisticId = `opt-${Date.now()}`;
-                const optimisticItem = { id: optimisticId, raw_text: textToSave, bucket: lastClassification.bucket };
-                setItems(prev => [optimisticItem, ...prev]);
-                // show toast
-                const toastId = String(Date.now());
-                setToasts(t => [...t, { id: toastId, text: 'Saving...' }]);
-
-                try {
-                  const res = await fetch('/api/items', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
-                    body: JSON.stringify({ raw_text: textToSave, bucket: lastClassification.bucket })
-                  });
-                  const j = await res.json();
-                  if (j?.ok && j.item) {
-                    // replace optimistic item with returned item
-                    setItems(prev => [j.item, ...prev.filter(it => it.id !== optimisticId)]);
-                    setToasts(t => t.map(x => x.id === toastId ? { ...x, text: 'Saved' } : x));
-                    setTimeout(() => setToasts(t => t.filter(x => x.id !== toastId)), 2000);
-                  } else {
-                    // rollback optimistic
-                    setItems(prev => prev.filter(it => it.id !== optimisticId));
-                    setToasts(t => t.map(x => x.id === toastId ? { ...x, text: 'Save failed' } : x));
-                    setTimeout(() => setToasts(t => t.filter(x => x.id !== toastId)), 3000);
-                  }
-                } catch {
-                  setItems(prev => prev.filter(it => it.id !== optimisticId));
-                  setToasts(t => t.map(x => x.id === toastId ? { ...x, text: 'Save failed' } : x));
-                  setTimeout(() => setToasts(t => t.filter(x => x.id !== toastId)), 3000);
-                } finally {
-                  setLastClassification(null);
-                }
-              }} style={{ padding: 8 }}>Save as item</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Render classification under each user message inside the message list */}
       </div>
 
       {showSidebar && (
@@ -147,9 +130,16 @@ export default function ChatWindow({ accessToken, showSidebar = true }: { access
           ) : (
             <ul style={{ listStyle: 'none', padding: 0 }}>
               {items.map(it => (
-                <li key={it.id} style={{ padding: 8, borderBottom: '1px solid #f2f2f2' }}>
-                  <div style={{ fontWeight: 600 }}>{it.raw_text}</div>
-                  <div style={{ fontSize: 12, color: '#666' }}>{it.bucket ?? '—'}</div>
+                <li key={it.id} style={{ padding: 8, borderBottom: '1px solid #f2f2f2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontWeight: 600 }}>{it.raw_text.split(' ').slice(0,8).join(' ')}{it.raw_text.split(' ').length>8?'…':''}</div>
+                    <div style={{ fontSize: 12, color: '#666' }}>{it.bucket ?? '—'} {it.when ? `· ${it.when}` : ''}</div>
+                  </div>
+                  <div>
+                    {it.suggestedNextStep && (
+                      <button onClick={() => setInput(it.suggestedNextStep || '')} style={{ fontSize: 12, padding: '6px 8px', borderRadius: 6 }}>Add next step</button>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
