@@ -12,6 +12,13 @@ export default function SignInPage() {
     e.preventDefault();
     setError(null);
 
+    if (!supabase) {
+      setError(
+        "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local"
+      );
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
