@@ -1,103 +1,119 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useState } from "react";
+import AuthGate from "@/components/AuthGate";
+
+type Item = {
+  id: string;
+  raw_text: string;
+  bucket?: string | null;
+  created_at: string;
+};
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [text, setText] = useState("");
+  const [items, setItems] = useState<Item[]>([]);
+  const [loading, setLoading] = useState(true);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const mod = await import("@/lib/supabaseClient");
+        const supabase = mod.supabase;
+        if (!supabase) return setLoading(false);
+
+        const { data, error } = await supabase
+          .from("items")
+          .select("id, raw_text, bucket, created_at")
+          .order("created_at", { ascending: false });
+
+        if (!mounted) return;
+        if (!error && data) setItems(data as Item[]);
+      } catch (err) {
+        // ignore
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  async function addItem() {
+    if (!text.trim()) return;
+    const mod = await import("@/lib/supabaseClient");
+    const supabase = mod.supabase;
+    if (!supabase) return alert("Supabase not configured");
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (!user) return alert("Please sign in");
+
+    const { data, error } = await supabase
+      .from("items")
+      .insert({ raw_text: text.trim(), user_id: user.id })
+      .select()
+      .single();
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setItems((prev) => [data as Item, ...(prev || [])]);
+    setText("");
+
+    // ask the server to classify it, then update the visible list
+    fetch("/api/classify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: (data as Item).id, text: (data as Item).raw_text })
+    })
+      .then((r) => r.json())
+      .then((res) => {
+        if (res?.bucket) {
+          setItems((prev) => prev.map((it) => it.id === (data as Item).id ? { ...it, bucket: res.bucket } : it));
+        }
+      })
+      .catch(() => {});
+  }
+
+  return (
+    <AuthGate>
+      <div style={{ maxWidth: 640, margin: "24px auto", padding: 16 }}>
+        <h1>Brain Dump</h1>
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Type any thought..."
+            style={{ flex: 1, padding: 8 }}
+          />
+          <button onClick={addItem} style={{ padding: "8px 12px" }}>
+            Add
+          </button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+
+        {loading ? (
+          <p>Loading...</p>
+        ) : items.length === 0 ? (
+          <p>No items yet. Add one above.</p>
+        ) : (
+          <ul style={{ listStyle: "none", padding: 0 }}>
+            {items.map((it) => (
+              <li key={it.id} style={{ padding: 8, borderBottom: "1px solid #eee" }}>
+                <div style={{ fontWeight: 600 }}>{it.raw_text}</div>
+                <div style={{ fontSize: 12, opacity: 0.7 }}>Bucket: {it.bucket ?? "—"}</div>
+                <div style={{ fontSize: 11, color: "#666", marginTop: 6 }}>{new Date(it.created_at).toLocaleString()}</div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </AuthGate>
   );
 }
