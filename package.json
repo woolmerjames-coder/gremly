@@ -2,13 +2,15 @@
   "name": "gremly",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
     "db:migrate:dry": "node scripts/run-sql.js --dry",
-    "db:migrate": "node scripts/run-sql.js"
+    "db:migrate": "node scripts/run-sql.js",
+    "test": "node scripts/test-api-items.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.58.0",
@@ -23,10 +25,12 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^17.2.3",
     "eslint": "^9",
     "eslint-config-next": "15.5.4",
     "pg": "^8",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   }
 }

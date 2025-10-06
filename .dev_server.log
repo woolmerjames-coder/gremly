@@ -1,0 +1,165 @@
+
+> gremly@0.1.0 dev
+> next dev --turbopack
+
+ ⚠ Port 3000 is in use by process 35776, using available port 3001 instead.
+   ▲ Next.js 15.5.4 (Turbopack)
+   - Local:        http://localhost:3001
+   - Network:      http://192.168.0.19:3001
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 630ms
+ ○ Compiling /api/health ...
+ ✓ Compiled /api/health in 593ms
+ GET /api/health 200 in 968ms
+ ✓ Compiled /api/chat in 118ms
+ POST /api/chat 500 in 2883ms
+ ✓ Compiled /api/briefs/today in 51ms
+ GET /api/briefs/today 200 in 370ms
+ POST /api/chat 500 in 2995ms
+ GET /api/briefs/today 200 in 417ms
+ POST /api/chat 200 in 1750ms
+ GET /api/briefs/today 200 in 738ms
+ ○ Compiling / ...
+ ✓ Compiled / in 783ms
+ GET / 200 in 928ms
+ ✓ Compiled /favicon.ico in 71ms
+ GET /favicon.ico?favicon.0b3bf435.ico 200 in 291ms
+ ✓ Compiled /signin in 121ms
+ GET /signin 200 in 156ms
+ GET / 200 in 49ms
+ HEAD / 200 in 40ms
+ ✓ Compiled /chat in 137ms
+ HEAD /chat 200 in 169ms
+ GET /api/briefs/today 200 in 388ms
+ GET /api/health 200 in 284ms
+ HEAD / 200 in 27ms
+ HEAD /chat 200 in 29ms
+ GET /api/briefs/today 200 in 291ms
+ GET /api/health 200 in 302ms
+ GET /chat 200 in 39ms
+ GET /api/briefs/today 200 in 343ms
+ POST /api/chat 200 in 2259ms
+ POST /api/chat 200 in 2214ms
+ GET /api/briefs/today 200 in 319ms
+ GET /chat 200 in 108ms
+ GET /signin 200 in 106ms
+ GET / 200 in 107ms
+ GET /chat 200 in 39ms
+ GET / 200 in 50ms
+ GET /signin 200 in 49ms
+ ✓ Compiled in 12ms
+ GET /api/briefs/today 200 in 774ms
+ ✓ Compiled /api/items in 46ms
+ POST /api/items 401 in 273ms
+ ✓ Compiled in 13ms
+ GET /api/briefs/today 200 in 405ms
+ ✓ Compiled in 17ms
+ POST /api/items 401 in 220ms
+ POST /api/items 401 in 224ms
+ POST /api/items 401 in 220ms
+ ✓ Compiled in 13ms
+ GET /api/briefs/today 200 in 846ms
+   Reload env: .env.local
+ GET /chat 200 in 75ms
+ ⨯ [Error: ENOENT: no such file or directory, open '/Users/jameswoolmer/Projects/gremly/.next/static/development/_buildManifest.js.tmp.gugedu7l97'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/jameswoolmer/Projects/gremly/.next/static/development/_buildManifest.js.tmp.gugedu7l97'
+}
+ ✓ Compiled /_error in 459ms
+ ⨯ [Error: ENOENT: no such file or directory, open '/Users/jameswoolmer/Projects/gremly/.next/static/development/_buildManifest.js.tmp.inrk9qu55lf'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/jameswoolmer/Projects/gremly/.next/static/development/_buildManifest.js.tmp.inrk9qu55lf'
+}
+[Error: ENOENT: no such file or directory, open '/Users/jameswoolmer/Projects/gremly/.next/static/development/_buildManifest.js.tmp.gugedu7l97'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/jameswoolmer/Projects/gremly/.next/static/development/_buildManifest.js.tmp.gugedu7l97'
+}
+ ⨯ [Error: ENOENT: no such file or directory, open '/Users/jameswoolmer/Projects/gremly/.next/static/development/_buildManifest.js.tmp.h1dkbcxhds'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/jameswoolmer/Projects/gremly/.next/static/development/_buildManifest.js.tmp.h1dkbcxhds'
+}
+[Error: ENOENT: no such file or directory, open '/Users/jameswoolmer/Projects/gremly/.next/static/development/_buildManifest.js.tmp.qxg2xaszs3'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/jameswoolmer/Projects/gremly/.next/static/development/_buildManifest.js.tmp.qxg2xaszs3'
+}
+ ⨯ [Error: ENOENT: no such file or directory, open '/Users/jameswoolmer/Projects/gremly/.next/static/development/_buildManifest.js.tmp.0tn91ksz8q4m'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/jameswoolmer/Projects/gremly/.next/static/development/_buildManifest.js.tmp.0tn91ksz8q4m'
+}
+ ⨯ [Error: ENOENT: no such file or directory, open '/Users/jameswoolmer/Projects/gremly/.next/static/development/_buildManifest.js.tmp.dy1hec68jfu'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/jameswoolmer/Projects/gremly/.next/static/development/_buildManifest.js.tmp.dy1hec68jfu'
+}
+[Error: ENOENT: no such file or directory, open '/Users/jameswoolmer/Projects/gremly/.next/static/development/_buildManifest.js.tmp.0tn91ksz8q4m'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/jameswoolmer/Projects/gremly/.next/static/development/_buildManifest.js.tmp.0tn91ksz8q4m'
+}
+ ⨯ [Error: ENOENT: no such file or directory, open '/Users/jameswoolmer/Projects/gremly/.next/static/development/_buildManifest.js.tmp.64di8kwsvpe'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/jameswoolmer/Projects/gremly/.next/static/development/_buildManifest.js.tmp.64di8kwsvpe'
+}
+[Error: ENOENT: no such file or directory, open '/Users/jameswoolmer/Projects/gremly/.next/static/development/_buildManifest.js.tmp.xb0n05n0v3g'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/jameswoolmer/Projects/gremly/.next/static/development/_buildManifest.js.tmp.xb0n05n0v3g'
+}
+ ⨯ Error: Module 19362 was instantiated because it was required from module 49695, but the module factory is not available.
+    at Object.<anonymous> (.next/server/app/page.js:15:3) {
+  page: '/'
+}
+ GET / 500 in 174ms
+ ✓ Compiled in 18ms
+ ✓ Compiled in 28ms
+ ⨯ [Error: ENOENT: no such file or directory, open '/Users/jameswoolmer/Projects/gremly/.next/required-server-files.json'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/jameswoolmer/Projects/gremly/.next/required-server-files.json',
+  page: '/api/items'
+}
+ POST /api/items 500 in 359ms
+ ✓ Compiled / in 12ms
+ ⨯ Error: Module 19362 was instantiated because it was required from module 49695, but the module factory is not available.
+    at Object.<anonymous> (.next/server/app/page.js:15:3) {
+  page: '/'
+}
+ HEAD / 500 in 65ms
+ GET /api/health 200 in 546ms
+ ⨯ [Error: ENOENT: no such file or directory, open '/Users/jameswoolmer/Projects/gremly/.next/required-server-files.json'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/jameswoolmer/Projects/gremly/.next/required-server-files.json',
+  page: '/api/items'
+}
+ POST /api/items 500 in 276ms
+ ⨯ [Error: ENOENT: no such file or directory, open '/Users/jameswoolmer/Projects/gremly/.next/required-server-files.json'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/jameswoolmer/Projects/gremly/.next/required-server-files.json',
+  page: '/api/items'
+}
+ POST /api/items 500 in 276ms
+[?25h

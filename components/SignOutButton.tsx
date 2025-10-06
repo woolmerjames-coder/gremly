@@ -23,8 +23,12 @@ export default function SignOutButton({ className }: { className?: string }) {
         // reload to reflect signed-out UI; apps may instead update auth state.
         window.location.reload();
       }
-    } catch (err: any) {
-      setError(err?.message ?? String(err));
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'message' in err) {
+        setError((err as { message?: string }).message ?? String(err));
+      } else {
+        setError(String(err));
+      }
     } finally {
       setLoading(false);
     }

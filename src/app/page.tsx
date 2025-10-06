@@ -30,7 +30,7 @@ export default function Home() {
 
         if (!mounted) return;
         if (!error && data) setItems(data as Item[]);
-      } catch (err) {
+      } catch {
         // ignore
       } finally {
         if (mounted) setLoading(false);

@@ -1,62 +1,136 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
-import { createClient } from "@supabase/supabase-js";
+import { extractJson } from "../../../lib/extractJson";
+import type { Classification } from "../../../lib/types";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+type ReqBody = { text?: string };
 
-type ReqBody = { id?: string; text?: string };
+function formatError(e: unknown) {
+  if (!e) return "Unknown error";
+  if (typeof e === "string") return e;
+  if (typeof e === "object" && "message" in e) return (e as { message?: string }).message;
+  return String(e);
+}
 
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as ReqBody;
-    const { id, text } = body;
-    if (!id || !text) return NextResponse.json({ error: "Missing id/text" }, { status: 400 });
+    const text = body?.text;
+    if (!text || typeof text !== "string") {
+      return NextResponse.json({ error: "Missing text" }, { status: 400 });
+    }
 
-    if (!process.env.OPENAI_API_KEY)
-      return NextResponse.json({ error: "OPENAI_API_KEY not configured" }, { status: 500 });
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!openaiKey) return NextResponse.json({ error: "OPENAI_API_KEY not configured" }, { status: 500 });
 
-    // 1) Ask the model to classify
-    const sys = "Classify the user's note into exactly one of: Task, Calendar, Habit, Goal, Note. Return JSON: {\"bucket\": <one of those>, \"confidence\": number between 0 and 1, \"explain\": short explanation}. Respond with valid JSON only.";
+    const openai = new OpenAI({ apiKey: openaiKey });
 
-    const chat = await openai.chat.completions.create({
+  const system = `You are a classifier for an ADHD-friendly BrainDump.\nReturn ONLY a single JSON object and nothing else.\nDo not include code fences, labels, or explanations.\nKeys: bucket, confidence, explain, suggestedNextStep, when.\nConfidence is 0..1 with one decimal. Keep strings short.`;
+
+    const exampleUser = "Note: remember to water the plants tomorrow";
+    const exampleAssistant = JSON.stringify({ bucket: "Note/Reflection", confidence: 0.9, explain: "Explicit 'Note:' and reminder tone." });
+
+    const schema = {
+      type: "object",
+      additionalProperties: false,
+      // Provider requires 'required' to include every key in properties; include optional keys too
+      required: ["bucket", "confidence", "explain", "suggestedNextStep", "when"],
+      properties: {
+        bucket: { type: "string", enum: ["Task", "Calendar Event", "Habit", "Goal/Project", "Note/Reflection"] },
+        confidence: { type: "number", minimum: 0, maximum: 1 },
+        explain: { type: "string" },
+        suggestedNextStep: { type: "string" },
+        when: { type: "string" }
+      }
+    } as const;
+
+    // Responses API call - cast to any so we can include the `seed` field per spec
+    // note: the Responses API expects the previous `messages` param under `input`
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const resp = await (openai.responses.create as any)({
       model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: sys },
+      temperature: 0.2,
+      input: [
+        { role: "system", content: system },
+        { role: "user", content: exampleUser },
+        { role: "assistant", content: exampleAssistant },
         { role: "user", content: text }
       ],
-      response_format: { type: "json_object" }
+      text: {
+        format: {
+          name: "classification",
+          type: "json_schema",
+          schema: schema
+        }
+      }
     });
 
-    const raw = chat.choices?.[0]?.message?.content || "{}";
-    let parsed: any = {};
-    try {
-      parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-    } catch (e) {
-      // fallback: try to extract JSON substring
-      const m = String(raw).match(/\{[\s\S]*\}/);
-      if (m) {
-        try { parsed = JSON.parse(m[0]); } catch (_) { parsed = {}; }
+  // Prefer output_text when available
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const anyResp: any = resp;
+    let outputText: string | undefined = anyResp.output_text;
+    if (!outputText) {
+      try {
+        const out = anyResp.output?.[0]?.content?.find((c: any) => c.type === "output_text")?.text;
+        if (typeof out === "string") outputText = out;
+      } catch {
+        // ignore
       }
     }
 
-    const bucket = parsed.bucket || "Note";
-    const confidence = parsed.confidence ?? 0.5;
+    // Try to extract JSON using our helper, falling back to the SDK json_schema block
+    let parsed: unknown = null;
+    if (outputText) {
+      try {
+        parsed = extractJson(String(outputText));
+      } catch {
+        // fallthrough
+      }
+    }
 
-    // 2) Update Supabase row server-side
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    if (!parsed && anyResp.output?.[0]?.content) {
+      try {
+        const js = anyResp.output[0].content.find((c: any) => c.type === 'json_schema');
+        if (js && js?.json_schema && js?.json_schema?.classification?.value) {
+          parsed = js.json_schema.classification.value;
+        }
+      } catch {
+        // ignore
+      }
+    }
 
-    const { error } = await supabase
-      .from("items")
-      .update({ bucket, ai_score: confidence })
-      .eq("id", id);
+    if (!parsed) {
+      return NextResponse.json({ error: "Model did not return valid JSON", raw: outputText ?? anyResp }, { status: 502, headers: { "Cache-Control": "no-store" } });
+    }
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    // Basic runtime validation / coercion to Classification
+    try {
+      const obj = parsed as Partial<Classification>;
+      const buckets = ["Task", "Calendar Event", "Habit", "Goal/Project", "Note/Reflection"] as const;
+      if (!obj.bucket || !buckets.includes(obj.bucket as any)) throw new Error('invalid bucket');
+      if (typeof obj.confidence !== 'number' || Number.isNaN(obj.confidence)) throw new Error('invalid confidence');
+      // clamp and one decimal
+      let conf = Math.max(0, Math.min(1, Number(obj.confidence)));
+      conf = Math.round(conf * 10) / 10;
+      if (!obj.explain || typeof obj.explain !== 'string') throw new Error('invalid explain');
 
-    return NextResponse.json({ ok: true, bucket, confidence });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? String(e) }, { status: 500 });
+      const classification: Classification = {
+        bucket: obj.bucket as Classification['bucket'],
+        confidence: conf,
+        explain: String(obj.explain).slice(0, 200),
+      };
+      if (obj.suggestedNextStep && typeof obj.suggestedNextStep === 'string') classification.suggestedNextStep = obj.suggestedNextStep.slice(0, 200);
+      if (obj.when && typeof obj.when === 'string') classification.when = obj.when.slice(0, 200);
+
+      return NextResponse.json(classification, { status: 200, headers: { "Cache-Control": "no-store" } });
+    } catch (err) {
+      return NextResponse.json({ error: String(err), raw: parsed }, { status: 502, headers: { "Cache-Control": "no-store" } });
+    }
+  } catch (e: unknown) {
+    return NextResponse.json({ error: formatError(e) }, { status: 500 });
   }
+}
+
+export async function GET() {
+  return NextResponse.json({ ok: true, methods: ["POST"], note: "POST to this endpoint with { text } to get a classification" }, { status: 200, headers: { "Cache-Control": "no-store" } });
 }

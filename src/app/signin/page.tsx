@@ -1,6 +1,7 @@
-"use client"; // runs in the browser
+"use client";
 
 import { useState } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export default function SignInPage() {
   const [email, setEmail] = useState("");
@@ -11,16 +12,12 @@ export default function SignInPage() {
     e.preventDefault();
     setError(null);
 
-    // Dynamically import the supabase client to avoid importing it at module
-    // load time in a client component (which can cause bundling/runtime issues).
-    let supabase: any = null;
+    let supabase: SupabaseClient | null = null;
     try {
       const mod = await import("@/lib/supabaseClient");
       supabase = mod.supabase;
-    } catch (err: any) {
-      setError(
-        `Failed to load Supabase client: ${err?.message ?? String(err)}`
-      );
+    } catch (err: unknown) {
+      setError(`Failed to load Supabase client: ${getMessage(err)}`);
       return;
     }
 
@@ -34,16 +31,12 @@ export default function SignInPage() {
     try {
       const { error: signError } = await supabase.auth.signInWithOtp({
         email,
-        options: {
-          emailRedirectTo:
-            typeof window !== "undefined" ? window.location.origin : undefined,
-        },
+        options: { emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined },
       });
-
       if (signError) setError(signError.message);
       else setSent(true);
-    } catch (err: any) {
-      setError(err?.message ?? String(err));
+    } catch (err: unknown) {
+      setError(getMessage(err));
     }
   }
 
@@ -70,4 +63,11 @@ export default function SignInPage() {
       {error && <p style={{ color: "red" }}>{error}</p>}
     </div>
   );
+
+  function getMessage(e: unknown) {
+    if (!e) return String(e);
+    if (typeof e === "string") return e;
+    if (typeof e === "object" && "message" in e) return (e as { message?: string }).message ?? String(e);
+    return String(e);
+  }
 }
